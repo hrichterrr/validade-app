@@ -224,7 +224,6 @@ let stream = null;
 let scanMode = 'barcode'; // 'barcode' | 'expiry'
 let scanLoopId = null;
 let zxingReader = null;
-let zxingHandled = false;
 
 const video = $('video');
 const canvas = $('canvas');
@@ -291,17 +290,25 @@ async function startBarcodeLoop() {
     };
     scanLoopId = requestAnimationFrame(tick);
   } else {
-    // Fallback: ZXing via CDN (Safari/iOS e outros navegadores sem BarcodeDetector)
+    // Fallback: ZXing via CDN (Safari/iOS e outros navegadores sem BarcodeDetector).
+    // Usa decode(video) quadro a quadro em vez de decodeFromVideoElementContinuously:
+    // esse método espera o evento "playing" do vídeo para começar, mas nosso vídeo já
+    // está tocando quando chega aqui, então o evento nunca dispara de novo e a leitura
+    // trava para sempre em silêncio (bug real observado no Safari/iOS).
     setScanStatus('Carregando leitor de código de barras...');
     try {
       if (!window.ZXing) await loadScript('https://unpkg.com/@zxing/library@0.21.3/umd/index.min.js');
       if (!zxingReader) zxingReader = new ZXing.BrowserMultiFormatReader();
-      zxingHandled = false;
       setScanStatus('Aponte a câmera para o código de barras.');
-      zxingReader.decodeFromVideoElementContinuously(video, (result) => {
-        if (zxingHandled || !stream || scanMode !== 'barcode') return;
-        if (result) { zxingHandled = true; onBarcode(result.getText()); }
-      });
+      const tick = () => {
+        if (!stream || scanMode !== 'barcode') return;
+        try {
+          const result = zxingReader.decode(video);
+          if (result) { onBarcode(result.getText()); return; }
+        } catch (e) { /* não encontrado neste quadro, tenta de novo */ }
+        scanLoopId = setTimeout(tick, 300);
+      };
+      tick();
     } catch (e) {
       console.error(e);
       setScanStatus('Leitor automático indisponível. Digite o código manualmente.');
@@ -310,7 +317,7 @@ async function startBarcodeLoop() {
 }
 
 function stopBarcodeLoop() {
-  if (scanLoopId) { cancelAnimationFrame(scanLoopId); scanLoopId = null; }
+  if (scanLoopId) { cancelAnimationFrame(scanLoopId); clearTimeout(scanLoopId); scanLoopId = null; }
   if (zxingReader) { try { zxingReader.reset(); } catch (e) { /* nada a limpar */ } }
 }
 
@@ -335,15 +342,20 @@ function guessCategory(categoriesText) {
   return '';
 }
 
-/* Busca o produto no Open Food Facts e preenche nome, marca e categoria como sugestão (só se o campo estiver vazio) */
-async function fetchAndFillProduct(code) {
+/* Busca o produto no Open Food Facts e preenche nome (+ tamanho da embalagem), marca e categoria
+   como sugestão (só se o campo estiver vazio) */
+async function fetchAndFillProduct(rawCode) {
+  const code = rawCode.replace(/[^0-9]/g, '');
   setScanStatus(`🔎 Buscando informações do produto ${code}...`);
   try {
-    const res = await fetch(`https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(code)}.json?fields=product_name,product_name_pt,brands,categories_tags_pt,categories`);
+    const res = await fetch(`https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(code)}.json?fields=product_name,product_name_pt,brands,categories_tags_pt,categories,quantity`);
     const data = await res.json();
     if (data.status === 1 && data.product) {
       const p = data.product;
-      if (!$('fName').value) $('fName').value = p.product_name_pt || p.product_name || '';
+      if (!$('fName').value) {
+        const baseName = p.product_name_pt || p.product_name || '';
+        $('fName').value = p.quantity && baseName ? `${baseName} (${p.quantity})` : baseName;
+      }
       if (!$('fBrand').value) $('fBrand').value = (p.brands || '').split(',')[0].trim();
       if (!$('fCategory').value) {
         const guess = guessCategory((p.categories_tags_pt || []).join(' ') + ' ' + (p.categories || ''));
@@ -352,7 +364,7 @@ async function fetchAndFillProduct(code) {
       setScanStatus(`✅ Produto encontrado: ${$('fName').value || code}. Confira os dados preenchidos.`);
       return true;
     }
-    setScanStatus('⚠️ Produto não encontrado na base. Preencha os campos manualmente.');
+    setScanStatus(`⚠️ Produto ${code} não encontrado na base. Preencha os campos manualmente.`);
   } catch {
     setScanStatus('⚠️ Sem conexão para buscar o produto. Preencha os campos manualmente.');
   }
@@ -362,7 +374,7 @@ async function fetchAndFillProduct(code) {
 async function onBarcode(code) {
   stopBarcodeLoop();
   navigator.vibrate?.(120);
-  $('fBarcode').value = code;
+  $('fBarcode').value = code.replace(/[^0-9]/g, '') || code;
   await fetchAndFillProduct(code);
   setScanMode('expiry');
 }
