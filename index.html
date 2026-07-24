@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#16a34a">
+<title>Validade — Controle de Despensa</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="topbar">
+  <h1>🥫 Validade</h1>
+  <button id="btnNotif" class="icon-btn" title="Ativar notificações">🔔</button>
+</header>
+
+<div id="alertBanner" class="alert-banner hidden"></div>
+
+<main id="viewInventory" class="view">
+  <div class="toolbar">
+    <input type="search" id="searchBox" placeholder="Buscar produto...">
+    <select id="sortBy">
+      <option value="expiry">Ordenar: validade</option>
+      <option value="name">Ordenar: nome</option>
+      <option value="added">Ordenar: mais recente</option>
+    </select>
+  </div>
+  <ul id="productList" class="product-list"></ul>
+  <p id="emptyMsg" class="empty-msg">Nenhum produto cadastrado.<br>Toque em <strong>＋ Adicionar</strong> para escanear seu primeiro produto.</p>
+</main>
+
+<button id="btnAdd" class="fab">＋ Adicionar</button>
+
+<!-- ===== Modal de adição/edição ===== -->
+<div id="modalAdd" class="modal hidden">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h2 id="modalTitle">Adicionar produto</h2>
+      <button class="icon-btn" id="btnCloseModal">✕</button>
+    </div>
+
+    <!-- Etapa scanner -->
+    <div id="scanStage" class="scan-stage">
+      <div class="scan-tabs">
+        <button id="tabBarcode" class="scan-tab active">📊 Código de barras</button>
+        <button id="tabExpiry" class="scan-tab">📅 Data de validade</button>
+      </div>
+      <div class="camera-wrap">
+        <video id="video" autoplay playsinline muted></video>
+        <div id="scanFrame" class="scan-frame"></div>
+        <canvas id="canvas" class="hidden"></canvas>
+      </div>
+      <div class="scan-controls">
+        <button id="btnStartCam" class="btn primary">📷 Abrir câmera</button>
+        <button id="btnCapture" class="btn primary hidden">📸 Capturar validade</button>
+        <button id="btnStopCam" class="btn ghost hidden">Fechar câmera</button>
+      </div>
+      <p id="scanStatus" class="scan-status"></p>
+    </div>
+
+    <!-- Formulário -->
+    <form id="productForm" class="product-form">
+      <label>Nome do produto
+        <input type="text" id="fName" required placeholder="Ex: Leite Integral 1L">
+      </label>
+      <label>Marca
+        <input type="text" id="fBrand" placeholder="Ex: Itambé">
+      </label>
+      <div class="row2">
+        <label>Código de barras
+          <input type="text" id="fBarcode" inputmode="numeric" placeholder="789...">
+        </label>
+        <label>Quantidade
+          <input type="number" id="fQty" min="1" value="1" required>
+        </label>
+      </div>
+      <label>Data de validade
+        <input type="date" id="fExpiry" required>
+      </label>
+      <label>Categoria
+        <select id="fCategory">
+          <option value="">— selecione —</option>
+          <option>Laticínios</option>
+          <option>Carnes</option>
+          <option>Hortifruti</option>
+          <option>Mercearia</option>
+          <option>Bebidas</option>
+          <option>Congelados</option>
+          <option>Padaria</option>
+          <option>Higiene/Limpeza</option>
+          <option>Outros</option>
+        </select>
+      </label>
+      <button type="submit" class="btn primary full" id="btnSave">💾 Salvar produto</button>
+    </form>
+  </div>
+</div>
+
+<!-- ===== Modal de configurações ===== -->
+<div id="modalSettings" class="modal hidden">
+  <div class="modal-content small">
+    <div class="modal-header">
+      <h2>Notificações</h2>
+      <button class="icon-btn" id="btnCloseSettings">✕</button>
+    </div>
+    <p id="notifStatus" class="notif-status"></p>
+    <label>Avisar com quantos dias de antecedência?
+      <select id="fWarnDays">
+        <option value="3">3 dias</option>
+        <option value="5">5 dias</option>
+        <option value="7" selected>7 dias</option>
+        <option value="14">14 dias</option>
+        <option value="30">30 dias</option>
+      </select>
+    </label>
+    <button id="btnEnableNotif" class="btn primary full">🔔 Ativar notificações</button>
+    <button id="btnTestNotif" class="btn ghost full">Testar notificação</button>
+  </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
