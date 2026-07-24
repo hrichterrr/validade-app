@@ -224,6 +224,7 @@ let stream = null;
 let scanMode = 'barcode'; // 'barcode' | 'expiry'
 let scanLoopId = null;
 let zxingReader = null;
+let zxingHandled = false;
 
 const video = $('video');
 const canvas = $('canvas');
@@ -290,30 +291,27 @@ async function startBarcodeLoop() {
     };
     scanLoopId = requestAnimationFrame(tick);
   } else {
-    // Fallback: ZXing via CDN
+    // Fallback: ZXing via CDN (Safari/iOS e outros navegadores sem BarcodeDetector)
     setScanStatus('Carregando leitor de código de barras...');
     try {
       if (!window.ZXing) await loadScript('https://unpkg.com/@zxing/library@0.21.3/umd/index.min.js');
       if (!zxingReader) zxingReader = new ZXing.BrowserMultiFormatReader();
+      zxingHandled = false;
       setScanStatus('Aponte a câmera para o código de barras.');
-      const tick = async () => {
-        if (!stream || scanMode !== 'barcode') return;
-        try {
-          drawFrame();
-          const result = zxingReader.decodeFromCanvas(canvas);
-          if (result) { onBarcode(result.getText()); return; }
-        } catch (e) { /* não encontrado neste frame */ }
-        scanLoopId = setTimeout(tick, 300);
-      };
-      tick();
+      zxingReader.decodeFromVideoElementContinuously(video, (result) => {
+        if (zxingHandled || !stream || scanMode !== 'barcode') return;
+        if (result) { zxingHandled = true; onBarcode(result.getText()); }
+      });
     } catch (e) {
+      console.error(e);
       setScanStatus('Leitor automático indisponível. Digite o código manualmente.');
     }
   }
 }
 
 function stopBarcodeLoop() {
-  if (scanLoopId) { cancelAnimationFrame(scanLoopId); clearTimeout(scanLoopId); scanLoopId = null; }
+  if (scanLoopId) { cancelAnimationFrame(scanLoopId); scanLoopId = null; }
+  if (zxingReader) { try { zxingReader.reset(); } catch (e) { /* nada a limpar */ } }
 }
 
 async function onBarcode(code) {

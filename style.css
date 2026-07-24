@@ -23,12 +23,16 @@ body {
 
 .topbar {
   position: sticky; top: 0; z-index: 10;
-  display: flex; align-items: center; justify-content: space-between;
   background: var(--green); color: #fff;
   padding: 14px 16px;
   padding-top: calc(14px + env(safe-area-inset-top));
 }
+.topbar-row { display: flex; align-items: center; justify-content: space-between; }
 .topbar h1 { font-size: 1.25rem; }
+.credit {
+  text-align: right; font-size: .68rem; opacity: .85;
+  margin-top: 2px; letter-spacing: .01em;
+}
 
 .icon-btn {
   background: none; border: none; font-size: 1.3rem; cursor: pointer;
