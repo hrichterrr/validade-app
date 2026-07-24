@@ -298,13 +298,27 @@ async function startBarcodeLoop() {
     setScanStatus('Carregando leitor de código de barras...');
     try {
       if (!window.ZXing) await loadScript('https://unpkg.com/@zxing/library@0.21.3/umd/index.min.js');
-      if (!zxingReader) zxingReader = new ZXing.BrowserMultiFormatReader();
+      if (!zxingReader) {
+        // Restringe aos formatos de código de barras de produto (igual ao BarcodeDetector
+        // nativo). Sem isso, o leitor tenta decodificar QUALQUER formato (QR, PDF417,
+        // Data Matrix etc.), o que aumenta muito a chance de ler o código errado — a
+        // busca então falha sempre, mesmo aparecendo um número na tela.
+        const hints = new Map();
+        hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [
+          ZXing.BarcodeFormat.EAN_13, ZXing.BarcodeFormat.EAN_8,
+          ZXing.BarcodeFormat.UPC_A, ZXing.BarcodeFormat.UPC_E,
+          ZXing.BarcodeFormat.CODE_128, ZXing.BarcodeFormat.CODE_39
+        ]);
+        zxingReader = new ZXing.BrowserMultiFormatReader(hints);
+      }
       setScanStatus('Aponte a câmera para o código de barras.');
       const tick = () => {
         if (!stream || scanMode !== 'barcode') return;
         try {
           const result = zxingReader.decode(video);
-          if (result) { onBarcode(result.getText()); return; }
+          const digits = (result && result.getText() || '').replace(/[^0-9]/g, '');
+          // Códigos de produto têm 6 a 14 dígitos; fora disso é leitura equivocada.
+          if (digits.length >= 6 && digits.length <= 14) { onBarcode(result.getText()); return; }
         } catch (e) { /* não encontrado neste quadro, tenta de novo */ }
         scanLoopId = setTimeout(tick, 300);
       };
