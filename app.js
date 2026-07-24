@@ -314,27 +314,64 @@ function stopBarcodeLoop() {
   if (zxingReader) { try { zxingReader.reset(); } catch (e) { /* nada a limpar */ } }
 }
 
-async function onBarcode(code) {
-  stopBarcodeLoop();
-  navigator.vibrate?.(120);
-  $('fBarcode').value = code;
-  setScanStatus(`✅ Código lido: ${code}. Buscando produto...`);
+/* Mapeia categorias do Open Food Facts para as opções do formulário (sugestão, não obrigatório) */
+const CATEGORY_KEYWORDS = {
+  'Laticínios': ['leite', 'queijo', 'iogurte', 'manteiga', 'laticін', 'laticin', 'dair'],
+  'Carnes': ['carne', 'frango', 'boi', 'suíno', 'suino', 'linguiça', 'linguica', 'embutido', 'meat', 'sausage'],
+  'Hortifruti': ['fruta', 'legume', 'verdura', 'hortifruti', 'fruit', 'vegetable'],
+  'Mercearia': ['arroz', 'feijão', 'feijao', 'massa', 'macarrão', 'macarrao', 'farinha', 'açúcar', 'acucar', 'grocer', 'cereal'],
+  'Bebidas': ['bebida', 'suco', 'refrigerante', 'água', 'agua', 'cerveja', 'vinho', 'drink', 'beverage', 'juice', 'soda'],
+  'Congelados': ['congelado', 'frozen'],
+  'Padaria': ['pão', 'pao', 'padaria', 'bread', 'bakery', 'biscoito', 'bolacha'],
+  'Higiene/Limpeza': ['higiene', 'limpeza', 'sabonete', 'detergente', 'shampoo', 'hygiene', 'cleaning']
+};
+
+function guessCategory(categoriesText) {
+  const t = (categoriesText || '').toLowerCase();
+  if (!t) return '';
+  for (const [category, keywords] of Object.entries(CATEGORY_KEYWORDS)) {
+    if (keywords.some(k => t.includes(k))) return category;
+  }
+  return '';
+}
+
+/* Busca o produto no Open Food Facts e preenche nome, marca e categoria como sugestão (só se o campo estiver vazio) */
+async function fetchAndFillProduct(code) {
+  setScanStatus(`🔎 Buscando informações do produto ${code}...`);
   try {
-    const res = await fetch(`https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(code)}.json?fields=product_name,product_name_pt,brands,categories_tags_pt`);
+    const res = await fetch(`https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(code)}.json?fields=product_name,product_name_pt,brands,categories_tags_pt,categories`);
     const data = await res.json();
     if (data.status === 1 && data.product) {
       const p = data.product;
       if (!$('fName').value) $('fName').value = p.product_name_pt || p.product_name || '';
       if (!$('fBrand').value) $('fBrand').value = (p.brands || '').split(',')[0].trim();
-      setScanStatus(`✅ Produto encontrado: ${$('fName').value || code}. Agora escaneie a data de validade.`);
-    } else {
-      setScanStatus('⚠️ Produto não encontrado na base. Preencha o nome manualmente.');
+      if (!$('fCategory').value) {
+        const guess = guessCategory((p.categories_tags_pt || []).join(' ') + ' ' + (p.categories || ''));
+        if (guess) $('fCategory').value = guess;
+      }
+      setScanStatus(`✅ Produto encontrado: ${$('fName').value || code}. Confira os dados preenchidos.`);
+      return true;
     }
+    setScanStatus('⚠️ Produto não encontrado na base. Preencha os campos manualmente.');
   } catch {
-    setScanStatus('⚠️ Sem conexão para buscar o produto. Preencha o nome manualmente.');
+    setScanStatus('⚠️ Sem conexão para buscar o produto. Preencha os campos manualmente.');
   }
+  return false;
+}
+
+async function onBarcode(code) {
+  stopBarcodeLoop();
+  navigator.vibrate?.(120);
+  $('fBarcode').value = code;
+  await fetchAndFillProduct(code);
   setScanMode('expiry');
 }
+
+/* Também busca ao digitar/colar o código manualmente (sem precisar escanear) */
+$('fBarcode').addEventListener('change', () => {
+  const code = $('fBarcode').value.trim();
+  if (code.length >= 8) fetchAndFillProduct(code);
+});
 
 /* ---- OCR da data de validade ---- */
 function drawFrame() {

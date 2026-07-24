@@ -1,4 +1,4 @@
-const CACHE = 'validade-v1';
+const CACHE = 'validade-v2';
 const ASSETS = ['.', 'index.html', 'style.css', 'app.js', 'manifest.json', 'icon.svg', 'icon-192.png', 'icon-512.png'];
 
 self.addEventListener('install', (e) => {
@@ -13,17 +13,18 @@ self.addEventListener('activate', (e) => {
   self.clients.claim();
 });
 
+// Network-first: sempre busca a versão mais nova quando online; usa o cache
+// como fallback só quando offline. Evita servir código desatualizado depois
+// de uma correção ser publicada.
 self.addEventListener('fetch', (e) => {
   const url = new URL(e.request.url);
   if (url.origin !== location.origin) return; // APIs e CDNs vão direto à rede
   e.respondWith(
-    caches.match(e.request).then(cached =>
-      cached || fetch(e.request).then(res => {
-        const copy = res.clone();
-        caches.open(CACHE).then(c => c.put(e.request, copy));
-        return res;
-      })
-    )
+    fetch(e.request).then(res => {
+      const copy = res.clone();
+      caches.open(CACHE).then(c => c.put(e.request, copy));
+      return res;
+    }).catch(() => caches.match(e.request))
   );
 });
 
