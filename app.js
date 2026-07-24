@@ -375,7 +375,10 @@ async function onBarcode(code) {
   stopBarcodeLoop();
   navigator.vibrate?.(120);
   $('fBarcode').value = code.replace(/[^0-9]/g, '') || code;
-  await fetchAndFillProduct(code);
+  const found = await fetchAndFillProduct(code);
+  // Dá tempo de ler a mensagem de resultado (encontrado/não encontrado) antes
+  // de trocar de aba, já que setScanMode() sobrescreve o texto de status.
+  await new Promise(r => setTimeout(r, found ? 1200 : 2200));
   setScanMode('expiry');
 }
 
